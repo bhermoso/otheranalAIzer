@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REDCap Analyzer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+            padding: 2rem;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { 
+            background: linear-gradient(135deg, #2563eb, #1e3a8a); 
+            border-radius: 16px; 
+            padding: 3rem 2rem; 
+            margin-bottom: 2rem; 
+            color: white; 
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+        }
+        .header h1 { font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem; }
+        .card { 
+            background: white; 
+            border-radius: 20px; 
+            padding: 3rem; 
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); 
+            margin-bottom: 2rem; 
+        }
+        .drop-zone { 
+            border: 3px dashed #d1d5db; 
+            border-radius: 16px; 
+            padding: 4rem 2rem; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.3s;
+            background: #f9fafb;
+        }
+        .drop-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+        .btn { 
+            background: linear-gradient(135deg, #3b82f6, #2563eb); 
+            color: white; 
+            border: none; 
+            padding: 1rem 2.5rem; 
+            border-radius: 12px; 
+            font-size: 1.1rem; 
+            font-weight: 600; 
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 12px rgba(59,130,246,0.4); }
+        .hidden { display: none !important; }
+        .spinner { 
+            width: 60px; 
+            height: 60px; 
+            border: 5px solid #e5e7eb; 
+            border-top-color: #3b82f6; 
+            border-radius: 50%; 
+            animation: spin 0.8s linear infinite; 
+            margin: 0 auto 2rem;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tabs { display: flex; background: #f3f4f6; overflow-x: auto; border-bottom: 3px solid #e5e7eb; }
+        .tab { 
+            padding: 1.25rem 2rem; 
+            cursor: pointer; 
+            white-space: nowrap; 
+            color: #6b7280; 
+            border-bottom: 3px solid transparent; 
+            margin-bottom: -3px;
+        }
+        .tab:hover { background: white; }
+        .tab.active { background: white; color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
+        .tab-content { padding: 2rem; display: none; }
+        .tab-content.active { display: block; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .metric { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 2rem; border-radius: 16px; }
+        .metric-val { font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; }
+        .vars { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 1.5rem; margin-top: 1rem; }
+        .var { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 4px solid #3b82f6; }
+        .var:hover { transform: translateY(-4px); box-shadow: 0 12px 20px rgba(0,0,0,0.15); }
+        .var h4 { font-size: 1.1rem; margin-bottom: 1rem; }
+        .badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; float: right; }
+        .badge-num { background: #dbeafe; color: #1e40af; }
+        .badge-cat { background: #d1fae5; color: #065f46; }
+        .stat { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #f3f4f6; }
+        .cat-item { background: #f9fafb; padding: 0.75rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+        .section { background: #f9fafb; border-radius: 16px; padding: 2rem; margin-bottom: 2rem; border-left: 4px solid #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>REDCap Analyzer</h1>
+            <p>Sistema de Análisis Estadístico Automático</p>
+        </div>
+
+        <div id="upload" class="card">
+            <div style="text-align: center;">
+                <div style="font-size: 4rem; margin-bottom: 1rem;">📊</div>
+                <h2 style="margin-bottom: 1rem;">Sube tu archivo de datos</h2>
+                <div id="dropZone" class="drop-zone">
+                    <h3>Arrastra aquí tu archivo CSV o Excel</h3>
+                    <button class="btn">Seleccionar Archivo</button>
+                </div>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;">
+            </div>
+        </div>
+
+        <div id="loading" class="card hidden">
+            <div style="text-align: center;">
+                <div class="spinner"></div>
+                <h2>Analizando datos...</h2>
+            </div>
+        </div>
+
+        <div id="dashboard" class="hidden">
+            <button class="btn" style="background: white; color: #3b82f6; border: 2px solid #3b82f6; margin-bottom: 1rem;">← Nuevo Análisis</button>
+            <div class="card">
+                <h2 id="fileName" style="margin-bottom: 0.5rem;">Dashboard</h2>
+                <p id="fileStats" style="color: #6b7280; margin-bottom: 2rem;">Cargando...</p>
+                <div class="tabs" id="tabsContainer"></div>
+                <div id="contentContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script>
+        let currentData = null;
+        
+        // Setup
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = dropZone.querySelector('.btn');
+        
+        uploadBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            fileInput.click();
+        });
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#3b82f6';
+            dropZone.style.background = '#eff6ff';
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#d1d5db';
+            dropZone.style.background = '#f9fafb';
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#d1d5db';
+            dropZone.style.background = '#f9fafb';
+            if (e.dataTransfer.files[0]) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) {
+                processFile(e.target.files[0]);
+            }
+        });
+        
+        function processFile(file) {
+            document.getElementById('upload').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            if (ext === 'csv') {
+                Papa.parse(file, {
+                    header: true,
+                    dynamicTyping: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        analyzeData(results.data, file.name);
+                    },
+                    error: (error) => {
+                        alert('Error al leer CSV: ' + error.message);
+                        resetApp();
+                    }
+                });
+            } else if (['xlsx', 'xls'].includes(ext)) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(sheet);
+                        analyzeData(jsonData, file.name);
+                    } catch (error) {
+                        alert('Error al leer Excel: ' + error.message);
+                        resetApp();
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                alert('Formato no soportado. Use CSV o Excel.');
+                resetApp();
+            }
+        }
+        
+        function analyzeData(data, fileName) {
+            if (!data || data.length === 0) {
+                alert('El archivo está vacío');
+                resetApp();
+                return;
+            }
+            
+            currentData = data;
+            const fields = Object.keys(data[0]);
+            const n = data.length;
+            
+            const analysis = {
+                n: n,
+                fields: fields.length,
+                descriptives: {},
+                blocks: {}
+            };
+            
+            // Analizar cada variable
+            fields.forEach(field => {
+                const values = data.map(r => r[field]);
+                const validValues = values.filter(v => v !== null && v !== undefined && v !== '');
+                
+                if (validValues.length === 0) return;
+                
+                const lower = field.toLowerCase();
+                if (lower.includes('id') || lower.includes('timestamp') || lower.includes('complete')) return;
+                if (lower.includes('score') || lower.includes('resultado') || lower.includes('puntuacion')) return;
+                
+                const stats = {
+                    n: validValues.length,
+                    missing: n - validValues.length,
+                    missingPct: (((n - validValues.length) / n) * 100).toFixed(1)
+                };
+                
+                const unique = [...new Set(validValues)];
+                const isNumeric = validValues.every(v => typeof v === 'number' && !isNaN(v));
+                
+                if (isNumeric && unique.length > 10) {
+                    const sorted = [...validValues].sort((a, b) => a - b);
+                    const sum = validValues.reduce((a, b) => a + b, 0);
+                    const mean = sum / validValues.length;
+                    const variance = validValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / (validValues.length - 1);
+                    
+                    stats.type = 'numeric';
+                    stats.mean = mean.toFixed(2);
+                    stats.std = Math.sqrt(variance).toFixed(2);
+                    stats.min = Math.min(...validValues);
+                    stats.max = Math.max(...validValues);
+                    stats.median = sorted[Math.floor(sorted.length / 2)].toFixed(2);
+                    stats.q1 = sorted[Math.floor(sorted.length * 0.25)].toFixed(2);
+                    stats.q3 = sorted[Math.floor(sorted.length * 0.75)].toFixed(2);
+                } else {
+                    const freq = {};
+                    validValues.forEach(v => freq[v] = (freq[v] || 0) + 1);
+                    const categories = Object.entries(freq)
+                        .map(([val, count]) => ({
+                            value: val,
+                            count: count,
+                            pct: ((count / validValues.length) * 100).toFixed(1)
+                        }))
+                        .sort((a, b) => b.count - a.count);
+                    
+                    stats.type = 'categorical';
+                    stats.categories = categories;
+                }
+                
+                analysis.descriptives[field] = stats;
+            });
+            
+            // Clasificar en bloques
+            const blockDefs = {
+                demo: { name: 'Demografía', vars: [], keywords: ['edad', 'age', 'sexo', 'sex', 'genero', 'gender'] },
+                auto: { name: 'Autopercepción', vars: [], keywords: ['autopercepcion', 'satisfaccion', 'salud_general', 'salud_mental'] },
+                alim: { name: 'Alimentación', vars: [], keywords: ['aceite', 'fruta', 'verdura', 'plato', 'bebida', 'alimentacion'] },
+                act: { name: 'Actividad Física', vars: [], keywords: ['sedentarismo', 'dias_', 'caminata', 'moderada', 'vigorosa', 'actividad'] },
+                sue: { name: 'Sueño', vars: [], keywords: ['sueno', 'sleep', 'horas', 'calidad', 'conciliar'] },
+                bien: { name: 'Bienestar', vars: [], keywords: ['who_', 'energia', 'tranquilidad', 'interes', 'bienestar'] },
+                sust: { name: 'Sustancias', vars: [], keywords: ['fuma', 'bebe', 'alcohol', 'tabaco', 'frecuencia'] },
+                sex: { name: 'Salud Sexual', vars: [], keywords: ['proteccion', 'parejas', 'its', 'prep', 'ppe', 'cribado'] },
+                otro: { name: 'Otras Variables', vars: [], keywords: [] }
+            };
+            
+            Object.keys(analysis.descriptives).forEach(field => {
+                const lower = field.toLowerCase();
+                let classified = false;
+                
+                for (const [key, block] of Object.entries(blockDefs)) {
+                    if (key === 'otro') continue;
+                    if (block.keywords.some(kw => lower.includes(kw))) {
+                        block.vars.push(field);
+                        classified = true;
+                        break;
+                    }
+                }
+                
+                if (!classified) {
+                    blockDefs.otro.vars.push(field);
+                }
+            });
+            
+            // Guardar solo bloques con variables
+            Object.entries(blockDefs).forEach(([key, block]) => {
+                if (block.vars.length > 0) {
+                    analysis.blocks[key] = block;
+                }
+            });
+            
+            showDashboard(analysis, fileName);
+        }
+        
+        function showDashboard(analysis, fileName) {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+            document.getElementById('fileName').textContent = 'Análisis: ' + fileName;
+            document.getElementById('fileStats').textContent = `${analysis.n} participantes • ${analysis.fields} variables • ${Object.keys(analysis.blocks).length} bloques`;
+            
+            // Crear tabs
+            const tabsHtml = ['<div class="tab active" data-id="summary">📊 Resumen</div>'];
+            Object.entries(analysis.blocks).forEach(([key, block]) => {
+                tabsHtml.push(`<div class="tab" data-id="${key}">${block.name}</div>`);
+            });
+            document.getElementById('tabsContainer').innerHTML = tabsHtml.join('');
+            
+            // Crear contenido
+            let contentHtml = `<div class="tab-content active" id="content-summary">${renderSummary(analysis)}</div>`;
+            Object.entries(analysis.blocks).forEach(([key, block]) => {
+                contentHtml += `<div class="tab-content" id="content-${key}">${renderBlock(key, block, analysis)}</div>`;
+            });
+            document.getElementById('contentContainer').innerHTML = contentHtml;
+            
+            // Event listeners para tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-id');
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    document.getElementById('content-' + tabId).classList.add('active');
+                });
+            });
+            
+            // Event listener para reset
+            document.querySelector('#dashboard .btn').addEventListener('click', resetApp);
+        }
+        
+        function renderSummary(analysis) {
+            const numVars = Object.values(analysis.descriptives).filter(d => d.type === 'numeric').length;
+            const catVars = Object.values(analysis.descriptives).filter(d => d.type === 'categorical').length;
+            
+            let html = '<div class="metrics">';
+            html += `<div class="metric"><div>Participantes</div><div class="metric-val">${analysis.n}</div></div>`;
+            html += `<div class="metric" style="background: linear-gradient(135deg, #10b981, #059669);"><div>Variables</div><div class="metric-val">${Object.keys(analysis.descriptives).length}</div></div>`;
+            html += `<div class="metric" style="background: linear-gradient(135deg, #f59e0b, #d97706);"><div>Bloques</div><div class="metric-val">${Object.keys(analysis.blocks).length}</div></div>`;
+            html += `<div class="metric" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);"><div>Numéricas / Categóricas</div><div class="metric-val">${numVars} / ${catVars}</div></div>`;
+            html += '</div>';
+            
+            html += '<div class="section"><h2>Distribución por Bloque</h2>';
+            Object.entries(analysis.blocks).forEach(([key, block]) => {
+                const pct = ((block.vars.length / Object.keys(analysis.descriptives).length) * 100).toFixed(0);
+                html += `<div style="margin-bottom: 1rem;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <strong>${block.name}</strong>
+                        <span>${block.vars.length} variables (${pct}%)</span>
+                    </div>
+                    <div style="background: #e5e7eb; height: 8px; border-radius: 4px;">
+                        <div style="background: #3b82f6; height: 100%; width: ${pct}%; border-radius: 4px;"></div>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+            
+            return html;
+        }
+        
+        function renderBlock(key, block, analysis) {
+            let html = `<div class="section"><h2>${block.name}</h2><p style="color: #6b7280; margin-top: 0.5rem;">${block.vars.length} variables en este bloque</p></div>`;
+            html += '<div class="vars">';
+            
+            block.vars.forEach(varName => {
+                const stats = analysis.descriptives[varName];
+                html += `<div class="var">
+                    <h4>${varName} <span class="badge badge-${stats.type === 'numeric' ? 'num' : 'cat'}">${stats.type === 'numeric' ? 'Numérica' : 'Categórica'}</span></h4>
+                    <div class="stat"><span>n válido:</span><strong>${stats.n}</strong></div>
+                    <div class="stat"><span>Missing:</span><strong>${stats.missing} (${stats.missingPct}%)</strong></div>`;
+                
+                if (stats.type === 'numeric') {
+                    html += `
+                        <div class="stat"><span>Media ± DE:</span><strong>${stats.mean} ± ${stats.std}</strong></div>
+                        <div class="stat"><span>Mediana [Q1-Q3]:</span><strong>${stats.median} [${stats.q1}-${stats.q3}]</strong></div>
+                        <div class="stat"><span>Rango:</span><strong>[${stats.min} - ${stats.max}]</strong></div>
+                    `;
+                } else {
+                    html += '<div style="margin-top: 1rem;">';
+                    stats.categories.slice(0, 5).forEach(cat => {
+                        html += `<div class="cat-item">
+                            <div><strong>${cat.value}</strong><div style="font-size: 0.85rem; color: #6b7280;">${cat.count} (${cat.pct}%)</div></div>
+                            <div style="flex: 1; margin-left: 1rem; background: #e5e7eb; height: 6px; border-radius: 3px;">
+                                <div style="background: #3b82f6; height: 100%; width: ${cat.pct}%; border-radius: 3px;"></div>
+                            </div>
+                        </div>`;
+                    });
+                    if (stats.categories.length > 5) {
+                        html += `<div style="text-align: center; color: #6b7280; margin-top: 0.5rem; font-size: 0.9rem;">... y ${stats.categories.length - 5} categorías más</div>`;
+                    }
+                    html += '</div>';
+                }
+                
+                html += '</div>';
+            });
+            
+            html += '</div>';
+            return html;
+        }
+        
+        function resetApp() {
+            currentData = null;
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('upload').classList.remove('hidden');
+            document.getElementById('loading').classList.add('hidden');
+            fileInput.value = '';
+        }
+    </script>
+</body>
+</html>
